@@ -223,7 +223,7 @@ export const userHandler = async (
       } else if (action === "getUser") {
         return getUser(body.email);
       } else {
-        return responseData(400, "Invalid action for GET");
+        return responseData(400, "Invalid action for GET method");
       }
     case "PUT":
       return updateUser(body);
