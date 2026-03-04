@@ -1,5 +1,6 @@
 import { hashSync } from "bcryptjs";
 import { dynamodbClient } from "../services/dynamodb.js";
+
 import {
   DeleteCommand,
   GetCommand,
@@ -8,29 +9,11 @@ import {
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { config } from "../config/env.js";
-import type {
-  APIGatewayProxyEvent,
-  APIGatewayProxyEventV2,
-  APIGatewayProxyResult,
-} from "aws-lambda";
+import type { APIGatewayProxyEventV2, APIGatewayProxyResult } from "aws-lambda";
 import type { CreateUserInterface } from "../types/interface.js";
-
-const responseData = (
-  statusCode = 500,
-  msg = "Internal Server Error",
-  data?: any,
-) => {
-  const bodyOpn: any = {
-    message: msg,
-  };
-  if (data != undefined) {
-    bodyOpn.data = data;
-  }
-  return {
-    statusCode, // statusCode:400
-    body: JSON.stringify(bodyOpn),
-  };
-};
+import { responseData } from "../utils/methodUtils.js";
+import { sns } from "../services/sns.js";
+import { PublishCommand } from "@aws-sdk/client-sns";
 
 export const createUser = async (
   body: CreateUserInterface,
@@ -55,9 +38,23 @@ export const createUser = async (
     };
     await dynamodbClient.send(
       new PutCommand({
-        TableName: config.tableName,
+        TableName: config.userTable,
         Item: newUser,
         ConditionExpression: "attribute_not_exists(email)",
+      }),
+    );
+
+    await sns.send(
+      new PublishCommand({
+        TopicArn: config.userTopicArn,
+        Message: JSON.stringify({
+          eventType: "USER_CREATED",
+          service: "user-service",
+          timestamp: new Date().toISOString(),
+          payload: {
+            userId: email,
+          },
+        }),
       }),
     );
     return responseData(201, "User created successfully !");
@@ -74,7 +71,7 @@ export const getAllUsers = async (): Promise<APIGatewayProxyResult> => {
   try {
     const users = await dynamodbClient.send(
       new ScanCommand({
-        TableName: config.tableName,
+        TableName: config.userTable,
       }),
     );
 
@@ -96,7 +93,7 @@ export const getUser = async (
 
     const user = await dynamodbClient.send(
       new GetCommand({
-        TableName: config.tableName,
+        TableName: config.userTable,
         Key: { email },
       }),
     );
@@ -131,7 +128,7 @@ export const updateUser = async ({
 
     const res = await dynamodbClient.send(
       new UpdateCommand({
-        TableName: config.tableName,
+        TableName: config.userTable,
         Key: { email },
         UpdateExpression:
           "SET #username=:username, #age=:age, #updatedAt=:updatedAt, #role=:role",
@@ -182,7 +179,7 @@ export const deleteUser = async (
 
     const res = await dynamodbClient.send(
       new DeleteCommand({
-        TableName: config.tableName,
+        TableName: config.userTable,
         Key: { email },
         ConditionExpression: "attribute_exists(email)",
       }),

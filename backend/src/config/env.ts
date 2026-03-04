@@ -1,4 +1,6 @@
 export const config = {
   region: process.env.AWS_REGION,
-  tableName: process.env.TABLE_NAME,
+  userTable: process.env.USER_TABLE_NAME,
+  logsTable: process.env.LOGS_TABLE_NAME,
+  userTopicArn: process.env.USER_EVENTS_TOPIC_ARN,
 };
